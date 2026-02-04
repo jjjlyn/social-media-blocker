@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SocialMediaBlocker" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryVariant">@color/primary_variant</item>
+        <item name="colorSecondary">@color/accent</item>
+        <item name="android:statusBarColor">@color/background_light</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@color/background_light</item>
+        <item name="materialAlertDialogTheme">@style/Theme.SocialMediaBlocker.AlertDialog</item>
+    </style>
+
+    <style name="Theme.SocialMediaBlocker.AlertDialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.SocialMediaBlocker.Dialog</item>
+        <item name="colorSurface">@color/surface_card</item>
+        <item name="android:textColorPrimary">@color/text_main</item>
+    </style>
+
+    <style name="Theme.SocialMediaBlocker.PinDialog" parent="Theme.MaterialComponents.Light.Dialog">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryVariant">@color/primary_variant</item>
+        <item name="colorSecondary">@color/accent</item>
+        <item name="android:windowBackground">@color/background_light</item>
+    </style>
+
+    <style name="ShapeAppearance.SocialMediaBlocker.Dialog" parent="">
+        <item name="cornerSize">28dp</item>
+    </style>
+</resources>

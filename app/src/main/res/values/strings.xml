@@ -1,0 +1,53 @@
+<resources>
+    <string name="app_name">SNS 블로커</string>
+    <string name="accessibility_service_description">이 서비스는 중독성 있는 앱 실행을 탐지하고 차단하며, 무단 삭제를 방지하기 위해 실행 중인 앱을 모니터링합니다.</string>
+    <string name="device_admin_description">차단 서비스의 무단 삭제를 방지하기 위해 기기 관리자 권한이 필요합니다.</string>
+    
+    <string name="status_fully_active">시스템 보호가 완벽하게 작동 중입니다</string>
+    <string name="status_disabled">시스템 보호가 비활성화되었습니다</string>
+    
+    <string name="label_accessibility">접근성 권한</string>
+    <string name="detail_accessibility">중독성 앱 실행을 감지합니다</string>
+    <string name="detail_accessibility_pin_required">먼저 보호자 PIN을 설정하세요</string>
+    <string name="btn_grant">권한 허용</string>
+    <string name="btn_active">활성화됨</string>
+    <string name="btn_pin_required">PIN 설정 필요</string>
+    
+    <string name="label_admin">관리 레벨</string>
+    <string name="detail_admin">무단 삭제 및 중지를 방지합니다</string>
+    <string name="detail_admin_pin_required">먼저 보호자 PIN을 설정하세요</string>
+    <string name="btn_elevate">보안 강화</string>
+    
+    <string name="label_pin">부모 안심 PIN 설정</string>
+    <string name="detail_pin">설정 변경을 위한 암호화된 보호</string>
+    <string name="btn_configure">설정하기</string>
+    <string name="btn_modify">변경하기</string>
+    
+    <string name="label_registered_filters">개 필터링 작동 중</string>
+    <string name="disclaimer_text">SNS 블로커는 당신의 시간을 되찾기 위해 엄격한 경계를 유지합니다. 모든 설정은 확인된 부모 PIN을 통해서만 수정할 수 있습니다.</string>
+    <string name="blocked_msg">콘텐츠 접근이 제한되었습니다</string>
+    
+    <!-- Intro Strings (Operational Instructions) -->
+    <string name="intro_title_1">1. PIN 보안 설정</string>
+    <string name="intro_desc_1">먼저 부모 참여 PIN을 설정하세요. 보호가 활성화되었을 때 쉽게 우회하거나 비활성화할 수 없도록 보장합니다.</string>
+    <string name="intro_title_2">2. 접근성 권한 허용</string>
+    <string name="intro_desc_2">시스템 설정에서 SNS 블로커를 허용해주세요. 이를 통해 앱이 중독성 있는 소셜 미디어 플랫폼에 대한 접근을 감지하고 제한할 수 있습니다.</string>
+    <string name="intro_skip">다시 보지 않기</string>
+
+    <!-- Dialogs & Toasts -->
+    <string name="dialog_pin_title">부모 PIN 구성</string>
+    <string name="dialog_pin_verify_msg">설정을 수정하려면 보안 인증이 필요합니다.\n\n현재 PIN을 입력하세요:</string>
+    <string name="dialog_new_pin_msg">알림: PIN은 주 관리자가 설정해야 합니다.\n\n숫자 PIN(4~6자리)을 입력하세요:</string>
+    <string name="dialog_confirm">확인</string>
+    <string name="dialog_establish">설정</string>
+    <string name="dialog_cancel">취소</string>
+    <string name="toast_verify_fail">인증 실패: 잘못된 PIN입니다.</string>
+    <string name="toast_min_digits">설정 실패: 최소 4자리가 필요합니다.</string>
+    <string name="toast_pin_set">PIN이 성공적으로 설정되었습니다.</string>
+    <string name="toast_pin_updated">PIN이 업데이트되었습니다.</string>
+    <string name="toast_pin_required">PIN을 입력하세요</string>
+    <string name="toast_pin_verified">확인되었습니다</string>
+    <string name="toast_attempts_exceeded">시도 횟수 초과. 홈으로 이동합니다</string>
+    <string name="toast_pin_invalid">PIN이 올바르지 않습니다 (남은 시도: %d)</string>
+    <string name="toast_pin_mandatory">PIN을 입력해야 합니다</string>
+</resources>

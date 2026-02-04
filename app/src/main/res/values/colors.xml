@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#000000</color>
+    <color name="primary_variant">#1A1C1E</color>
+    <color name="accent">#0061A4</color>
+    <color name="background_light">#FDFDFD</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="text_main">#1A1C1E</color>
+    <color name="text_sub">#74777F</color>
+    <color name="status_safe">#E8F5E9</color>
+    <color name="status_error">#FFEBEE</color>
+    <color name="glass_outline">#1A000000</color>
+</resources>

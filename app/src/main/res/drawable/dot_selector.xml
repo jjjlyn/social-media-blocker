@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true">
+        <layer-list>
+            <!-- By using gravity="center", the internal shape won't stretch even if the container is not perfectly square -->
+            <item android:gravity="center">
+                <shape android:shape="oval">
+                    <solid android:color="#212529" />
+                    <size android:width="10dp" android:height="10dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <item>
+        <layer-list>
+            <item android:gravity="center">
+                <shape android:shape="oval">
+                    <solid android:color="#CED4DA" />
+                    <size android:width="10dp" android:height="10dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</selector>
