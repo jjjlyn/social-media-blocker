@@ -1,13 +1,13 @@
 package com.example.socialmediablocker
 
 import android.accessibilityservice.AccessibilityService
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.util.Log
 import com.example.socialmediablocker.data.repository.DomainRepository
+import com.example.socialmediablocker.policy.DefaultBlocklist
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,7 +41,24 @@ class BlockerService : AccessibilityService() {
     private val ACCESSIBILITY_ENABLE_GRACE_MS = 15000L // 15초 (초기 활성화 직후만)
 
     // Keywords to search for in browser URL bar or content descriptions
-    private val blockedKeywords = listOf("youtube.com", "youtu.be", "m.youtube.com")
+    private val blockedKeywords = listOf(
+        "youtube.com", "youtu.be", "m.youtube.com",
+        "teamblind.com", "blind.com",
+        "inven.co.kr", "www.inven.co.kr", "82cook.com", "www.82cook.com",
+        "humoruniv.com", "huv.kr", "웃긴대학"
+    )
+    private val kakaoTalkPackageName = "com.kakao.talk"
+    private val browserPackageIdentifiers = listOf(
+        "chrome", "browser", "firefox", "opera", "kakao.talk", "internet"
+    )
+    private val possibleUrlPattern = Regex(
+        """(?i)(?:https?://)?(?:www\.)?[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+\.[a-z]{2,}(?:/[^\s]*)?"""
+    )
+    private val browserReentryBlockMs = 1500L
+    private var browserReentryBlockUntil = 0L
+    private var browserReentryPackage: String = ""
+    private var lastBlockUiActionAt = 0L
+    private val BLOCK_UI_THROTTLE_MS = 1200L
 
     // PIN 프롬프트 중복 방지
     private var lastPinPromptAt: Long = 0
@@ -76,11 +93,7 @@ class BlockerService : AccessibilityService() {
             // 단순 포함 여부 확인 (더 광범위하게 차단)
             if (blockedPackages.contains(packageName)) {
                 Log.w(TAG, "Blocked app detected: $packageName")
-                showBlockedOverlay()
-                performGlobalAction(GLOBAL_ACTION_HOME)
-                
-                // 2중 차단: 뒤로가기도 시도
-                performGlobalAction(GLOBAL_ACTION_BACK)
+                triggerBrowserBlockExit(packageName)
                 return
             }
 
@@ -131,17 +144,49 @@ class BlockerService : AccessibilityService() {
             }
             
             // 3. 브라우저 차단 확인
-             val browserPackages = listOf(
-                "chrome", "browser", "firefox", "opera", "kakao.talk", "internet"
-            )
-            
-            if (browserPackages.any { packageName.contains(it) }) {
+            if (isBrowserPackage(packageName)) {
+                Log.d(TAG, "Browser package detected: $packageName, eventType=${event.eventType}, class=${event.className}")
+                
+                // Strategy 1: Check rootInActiveWindow
                 val rootNode = rootInActiveWindow
-                if (checkForYouTubeInBrowser(rootNode)) {
-                    Log.w(TAG, "Blocked Website Detected into Browser")
-                    showBlockedOverlay()
-                    performGlobalAction(GLOBAL_ACTION_HOME)
+                if (rootNode != null) {
+                    Log.d(TAG, "rootInActiveWindow available, class=${rootNode.className}")
+                    if (checkForYouTubeInBrowser(rootNode, packageName)) {
+                        Log.w(TAG, "Blocked Website by browser check (rootInActiveWindow)")
+                        triggerBrowserBlockExit(packageName)
+                        return
+                    }
                 }
+                
+                // Strategy 3: Check ALL windows (for multi-window / Custom Tabs scenarios)
+                try {
+                    val allWindows = windows
+                    if (allWindows != null) {
+                        Log.d(TAG, "Checking ${allWindows.size} windows")
+                        for (window in allWindows) {
+                            val windowRoot = window.root ?: continue
+                            Log.d(TAG, "Window: type=${window.type}, pkg=${windowRoot.packageName}")
+                            
+                            // DEBUG: Dump accessibility tree for KakaoTalk windows
+                            if (windowRoot.packageName?.toString()?.contains("kakao") == true) {
+                                Log.w(TAG, "=== TREE DUMP for KakaoTalk window ===")
+                                dumpNodeTree(windowRoot, 0, 4)
+                                Log.w(TAG, "=== END TREE DUMP ===")
+                            }
+                            
+                            if (checkForYouTubeInBrowser(windowRoot, packageName)) {
+                                Log.w(TAG, "Blocked Website by browser check (multi-window) in window type=${window.type}")
+                                triggerBrowserBlockExit(packageName)
+                                windowRoot.recycle()
+                                return
+                            }
+                            windowRoot.recycle()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error checking windows", e)
+                }
+                
             }
             
         } catch (e: Exception) {
@@ -531,8 +576,90 @@ class BlockerService : AccessibilityService() {
         return pkg.contains("launcher") || pkg.contains("quickstep") || pkg.endsWith(".home")
     }
 
+    private fun isBlockedByTextContent(text: String): Boolean {
+        if (text.isBlank()) return false
 
-    private fun checkForYouTubeInBrowser(node: AccessibilityNodeInfo?): Boolean {
+        val normalizedText = text.lowercase()
+        if (!isRepositoryReady) {
+            return false
+        }
+
+        for (match in possibleUrlPattern.findAll(normalizedText)) {
+            val candidate = match.value.trim()
+                .trimEnd('.', ',', ';', ':', ')', ']', '}', '!', '?', '"', '\'', '>')
+            if (candidate.isNotBlank() && isBlockedUrl(candidate)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun triggerBrowserBlockExit(lockPackage: String = "") {
+        val now = System.currentTimeMillis()
+        if (now - lastBlockUiActionAt < BLOCK_UI_THROTTLE_MS) {
+            return
+        }
+        lastBlockUiActionAt = now
+
+        showBlockedOverlay()
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        handler.post {
+            performGlobalAction(GLOBAL_ACTION_BACK)
+        }
+    }
+
+    private fun isBrowserPackage(packageName: String): Boolean {
+        val normalizedPackageName = packageName.lowercase()
+        return browserPackageIdentifiers.any { normalizedPackageName.contains(it) }
+    }
+
+    private fun shouldKeepBrowserBlocked(packageName: String): Boolean {
+        val now = System.currentTimeMillis()
+        if (browserReentryBlockUntil <= now) {
+            clearBrowserReentryState()
+            return false
+        }
+        
+        if (browserReentryPackage.isBlank()) {
+            return false
+        }
+        
+        if (!isBrowserPackage(packageName)) {
+            return false
+        }
+
+        return true
+    }
+
+    private fun saveBrowserReentryState(lockPackage: String, until: Long) {
+        val prefs = getSharedPreferences(APP_PREFS, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString(KEY_BROWSER_REENTRY_PACKAGE, lockPackage)
+            .putLong(KEY_BROWSER_REENTRY_UNTIL, until)
+            .apply()
+    }
+
+    private fun loadBrowserReentryState() {
+        val prefs = getSharedPreferences(APP_PREFS, Context.MODE_PRIVATE)
+        browserReentryPackage = prefs.getString(KEY_BROWSER_REENTRY_PACKAGE, "") ?: ""
+        browserReentryBlockUntil = prefs.getLong(KEY_BROWSER_REENTRY_UNTIL, 0L)
+
+        if (browserReentryBlockUntil <= System.currentTimeMillis()) {
+            clearBrowserReentryState()
+        }
+    }
+
+    private fun clearBrowserReentryState() {
+        browserReentryPackage = ""
+        browserReentryBlockUntil = 0L
+        val prefs = getSharedPreferences(APP_PREFS, Context.MODE_PRIVATE)
+        prefs.edit()
+            .remove(KEY_BROWSER_REENTRY_PACKAGE)
+            .remove(KEY_BROWSER_REENTRY_UNTIL)
+            .apply()
+    }
+
+    private fun checkForYouTubeInBrowser(node: AccessibilityNodeInfo?, packageName: String = ""): Boolean {
         if (node == null) return false
         
         try {
@@ -575,9 +702,12 @@ class BlockerService : AccessibilityService() {
                 }
             }
             
-            // Fallback: check all relevant nodes for URLs
-            // Expanded to include TextViews for apps like KakaoTalk
-            return checkNodesForUrl(node)
+            // 1. Detect Browser Context (WebView present in hierarchy?)
+            // This is critical for KakaoTalk where the URL bar is just a TextView and checks need to be stricter.
+            val isBrowserContext = hasWebView(node)
+            
+            // Fallback: check only address-bar-like nodes
+            return checkNodesForUrl(node, packageName, isBrowserContext)
             
         } catch (e: Exception) {
             Log.e(TAG, "Error in checkForYouTubeInBrowser", e)
@@ -586,63 +716,23 @@ class BlockerService : AccessibilityService() {
     }
     
     /**
-     * 재귀적으로 URL을 포함한 노드 찾기
-     * EditText, TextView, Button 등 텍스트가 있는 모든 노드 검사
+     * 주소창 후보 노드에서만 URL을 검사
      */
-    /**
-     * 웹뷰 및 브라우저 콘텐츠 검사
-     * 1. WebView 클래스가 있는지 확인
-     * 2. WebView 내부 또는 주소창에서 차단 키워드/URL 감지
-     */
-    private fun checkNodesForUrl(node: AccessibilityNodeInfo?): Boolean {
+    private fun checkNodesForUrl(node: AccessibilityNodeInfo?, packageName: String = "", isBrowserContext: Boolean = false): Boolean {
         if (node == null) return false
         
         try {
-            // EditText 취약점: 입력 가능한 필드(EditText 등)는 검사하지 않음 (타이핑 방해 방지)
-            if (node.isEditable) return false
-
             val className = node.className?.toString()
             val text = node.text?.toString()
             val contentDesc = node.contentDescription?.toString()
             val viewId = node.viewIdResourceName?.lowercase()
-            
-            // 1. WebView 감지 (카카오톡 #검색 등은 WebView 사용)
-            if (className == "android.webkit.WebView") {
-                // WebView 내부 콘텐츠 검사 시작
-                if (checkWebViewContent(node)) {
-                    return true
-                }
-            }
+            val combinedText = ((text ?: "") + " " + (contentDesc ?: "")).lowercase()
 
-            // 1-1. URL 바로 추정되는 ViewId 검사
-            if (viewId != null && (
-                viewId.contains("url_bar") ||
-                viewId.contains("address") ||
-                viewId.contains("omnibox") ||
-                viewId.contains("location_bar")
-            )) {
-                val checkText = (text ?: "") + " " + (contentDesc ?: "")
-                if (checkText.isNotBlank() && (blockedKeywords.any { checkText.contains(it, ignoreCase = true) } || isBlockedUrl(checkText))) {
-                    Log.w(TAG, "Blocked URL detected in viewId($viewId): $checkText")
-                    return true
-                }
-            }
-            
-            // 2. 텍스트/콘텐츠 검사
-            // 주의: 일반 TextView나 Button을 검사하면 크롬 시작 페이지의 '북마크' 아이콘 등을 URL로 오인하여 차단함
-            // 따라서 EditText(주소창 후보)가 아니면 일반 텍스트 문맥 검사는 건너뜀
-            if (className == "android.widget.EditText" || className?.contains("EditText") == true) {
-                 if (text != null || contentDesc != null) {
-                    val checkText = (text ?: "") + " " + (contentDesc ?: "")
-                    
-                    // URL 형식 확인 (http, www 등)
-                    if (checkText.length > 3 && checkText.contains(".")) {
-                         if (isBlockedUrl(checkText)) {
-                            Log.w(TAG, "Blocked URL detected in $className: $checkText")
-                            return true
-                        }
-                    }
-                }
+            if (isAddressCandidateNode(className, viewId, packageName, isBrowserContext) &&
+                isAddressBarText(combinedText) &&
+                isBlockedByTextContent(combinedText)) {
+                Log.w(TAG, "Blocked URL detected in browser UI node: package=$packageName, class=$className, text=$combinedText")
+                return true
             }
             
             // 자식 노드 순회
@@ -650,7 +740,7 @@ class BlockerService : AccessibilityService() {
                 val child = node.getChild(i) ?: continue
                 
                 try {
-                    if (checkNodesForUrl(child)) {
+                    if (checkNodesForUrl(child, packageName, isBrowserContext)) {
                         child.recycle()
                         return true
                     }
@@ -666,105 +756,98 @@ class BlockerService : AccessibilityService() {
         }
     }
 
-    /**
-     * WebView 내부 콘텐츠 재귀 검색
-     * WebView 내부에서는 URL 형식이 아니더라도 'YouTube' 같은 키워드가 보이면 차단 (더 강력함)
-     */
-    private fun checkWebViewContent(node: AccessibilityNodeInfo?): Boolean {
-        if (node == null) return false
-        
-        try {
-            // **중요**: 입력 가능한 필드(EditText 등)는 검사하지 않음 (타이핑 방해 방지)
-            if (node.isEditable) {
-                return false
-            }
+    private fun isAddressCandidateNode(
+        className: String?,
+        viewId: String?,
+        packageName: String,
+        isBrowserContext: Boolean
+    ): Boolean {
+        val normalizedClassName = className?.lowercase() ?: ""
+        val normalizedViewId = viewId?.lowercase() ?: ""
+        val normalizedPackage = packageName.lowercase()
 
-            val text = node.text?.toString()
-            val contentDesc = node.contentDescription?.toString()
-            
-            // 검사할 텍스트 통합
-            val contentToCheck = ((text ?: "") + " " + (contentDesc ?: "")).lowercase()
-            
-            // 차단 키워드 확인
-            // 1. 단순 "keyboard"나 "suggestion" 등은 제외
-            // 2. 텍스트가 너무 짧으면(예: "YouTube" 버튼 하나) 오탐 가능성 있으므로, 
-            //    확실한 콘텐츠(제목, URL 등)일 때만 차단
-            
-            if (contentToCheck.isNotEmpty()) {
-                // 입력창 관련 텍스트 제외
-                if (contentToCheck.contains("search") || contentToCheck.contains("검색") || contentToCheck.contains("입력")) {
-                    return false
-                } 
-                
-                // Block 'youtube' only if it has video metadata, is long content, OR matches specific URL patterns
-                
-                if (contentToCheck.contains("youtube") || contentToCheck.contains("youtu.be")) {
-                    
-                    // A. 구체적인 URL 패턴 확인 (단순 'youtube.com' 텍스트는 북마크일 수 있어 제외)
-                    // 실제로 접속했을 때 주소창이나 페이지 내용에 포함되는 패턴들
-                    if (contentToCheck.contains("m.youtube.com") || 
-                        contentToCheck.contains("www.youtube.com") ||
-                        contentToCheck.contains("/watch") ||
-                        contentToCheck.contains("/shorts") ||
-                        contentToCheck.contains("youtu.be")) {
-                        Log.w(TAG, "Blocked Specific URL Pattern inside WebView: $contentToCheck")
-                        return true
-                    }
-                    
-                    // B. 비디오 관련 메타데이터 포함 (검색 제안이 아닌 실제 콘텐츠일 확률 높음)
-                    val videoKeywords = listOf(
-                        "조회수", "views", 
-                        "구독", "subscri", 
-                        "좋아요", "like", 
-                        "싫어요", "dislike", 
-                        "공유", "share",
-                        "저장", "save",
-                        "댓글", "comment",
-                        "스트리밍", "stream",
-                        "실시간", "live",
-                        "게시", "posted",
-                        "전", "ago", // 1시간 전, 1 hour ago
-                        "watching", "시청",
-                        // 유튜브 홈 화면 UI 요소 (하단 탭, 상단 칩 등)
-                        "홈", "home",
-                        "보관함", "library",
-                        "맞춤 동영상", "recommended",
-                        "탐색", "explore",
-                        "커뮤니티", "community"
-                    )
-                    
-                    // "Shorts"는 탭 이름이기도 하고 콘텐츠이기도 함 -> URL 패턴에 이미 포함됨 (contentToCheck.contains("shorts"))
-                    
-                    if (videoKeywords.any { contentToCheck.contains(it) }) {
-                         Log.w(TAG, "Blocked Video/Home Content detected inside WebView: $contentToCheck")
-                         return true
-                    }
-                    
-                    // C. 아주 긴 텍스트는 여전히 차단 (단, 단순 suggestion인 15~20자 내외는 허용)
-                    // 예: "youtube premium" (15) -> 허용
-                    // 예: "Amazing Video Title - YouTube" (> 25) -> 차단
-                    if (contentToCheck.length > 30) {
-                         Log.w(TAG, "Blocked Long Content detected inside WebView: $contentToCheck")
-                         return true
-                    }
-                }
-            }
-            
-            // 자식 노드 순회
-            for (i in 0 until node.childCount) {
-                val child = node.getChild(i) ?: continue
-                if (checkWebViewContent(child)) {
-                    child.recycle()
-                    return true
-                }
-                child.recycle()
-            }
-            
-            return false
-        } catch (e: Exception) {
-             Log.e(TAG, "Error checking WebView content", e)
-             return false
+        if (normalizedViewId.contains("url_bar") ||
+            normalizedViewId.contains("address") ||
+            normalizedViewId.contains("omnibox") ||
+            normalizedViewId.contains("location_bar") ||
+            normalizedViewId.contains("toolbar")) {
+            return true
         }
+
+        if (normalizedClassName.contains("edittext")) {
+            return true
+        }
+
+        return isBrowserContext &&
+            normalizedPackage == kakaoTalkPackageName &&
+            normalizedClassName.contains("textview")
+    }
+
+    private fun isAddressBarText(text: String): Boolean {
+        val normalized = text.trim().lowercase()
+        if (normalized.isBlank()) return false
+        return normalized.startsWith("http://") ||
+            normalized.startsWith("https://") ||
+            normalized.startsWith("www.") ||
+            normalized.startsWith("m.") ||
+            normalized.contains(".com/") ||
+            normalized.contains(".co.kr/") ||
+            normalized.contains(".net/") ||
+            normalized.contains(".com") ||
+            normalized.contains(".co.kr") ||
+            normalized.contains(".net")
+    }
+
+    /**
+     * DEBUG: 접근성 트리 구조를 로그에 출력
+     */
+    private fun dumpNodeTree(node: AccessibilityNodeInfo?, depth: Int, maxDepth: Int) {
+        if (node == null || depth >= maxDepth) return
+        try {
+            val indent = "  ".repeat(depth)
+            val cls = node.className?.toString() ?: "null"
+            val txt = node.text?.toString()?.take(100) ?: ""
+            val desc = node.contentDescription?.toString()?.take(100) ?: ""
+            val vid = node.viewIdResourceName ?: ""
+            Log.w(TAG, "${indent}[$depth] class=$cls text=\"$txt\" desc=\"$desc\" viewId=$vid children=${node.childCount}")
+            
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i)
+                if (child != null) {
+                    dumpNodeTree(child, depth + 1, maxDepth)
+                    child.recycle()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error dumping node at depth $depth", e)
+        }
+    }
+
+    private fun hasWebView(node: AccessibilityNodeInfo?): Boolean {
+        if (node == null) return false
+        try {
+            val className = node.className?.toString()
+            if (className != null && (
+                className.contains("WebView", ignoreCase = true) || 
+                className.contains("webkit", ignoreCase = true) ||
+                className.contains("Browser", ignoreCase = true) ||
+                className.contains("WebBrowser", ignoreCase = true)
+            )) {
+                return true
+            }
+            
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i)
+                if (child != null) {
+                    val found = hasWebView(child)
+                    child.recycle()
+                    if (found) return true
+                }
+            }
+        } catch (e: Exception) {
+             // Ignore
+        }
+        return false
     }
     
     /**
@@ -778,13 +861,23 @@ class BlockerService : AccessibilityService() {
         }
         
         val normalizedUrl = url.trim().lowercase()
-        
+
         // Skip if it's clearly a search query
         if (normalizedUrl.contains("/search") ||
             normalizedUrl.contains("google.com/search") ||
             normalizedUrl.contains("bing.com/search") ||
             normalizedUrl.contains("naver.com/search") ||
             normalizedUrl.contains("daum.net/search")) {
+            return false
+        }
+        
+        // 1. Extract domain first (for whitelist + domain-level checks)
+        val domain = extractDomainFromUrl(normalizedUrl)
+        if (domain.isEmpty()) return false
+        
+        // Whitelisted domains should never be blocked
+        if (isWhitelistedDomain(domain)) {
+            Log.d(TAG, "URL allowed by whitelist: $normalizedUrl")
             return false
         }
         
@@ -795,9 +888,6 @@ class BlockerService : AccessibilityService() {
         }
         
         // 2. Check domain blocking (entire domains)
-        val domain = extractDomainFromUrl(normalizedUrl)
-        if (domain.isEmpty()) return false
-        
         // Check against DomainRepository
         val isBlocked = domainRepository.isBlocked(domain)
         if (isBlocked) {
@@ -825,6 +915,25 @@ class BlockerService : AccessibilityService() {
             Log.e(TAG, "Error checking URL patterns", e)
             return false
         }
+    }
+
+    private fun isWhitelistedDomain(domain: String): Boolean {
+        return DefaultBlocklist.WHITELIST.any { pattern ->
+            isWhitelistedByPattern(domain, pattern)
+        }
+    }
+
+    private fun isWhitelistedByPattern(domain: String, pattern: String): Boolean {
+        val normalizedDomain = domain.lowercase().trim()
+        val normalizedPattern = pattern.lowercase().trim()
+
+        if (normalizedPattern.isBlank()) return false
+        if (normalizedPattern.startsWith("*.")) {
+            val base = normalizedPattern.removePrefix("*.")
+            return normalizedDomain == base || normalizedDomain.endsWith(".$base")
+        }
+
+        return normalizedDomain == normalizedPattern
     }
     
     /**
@@ -873,6 +982,7 @@ class BlockerService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "Accessibility Service Connected Successfully")
+        loadBrowserReentryState()
 
         // 접근성 권한 활성화 직후에는 앱으로 복귀
         handlePendingAccessibilityEnable()
@@ -938,5 +1048,7 @@ class BlockerService : AccessibilityService() {
         private const val APP_PREFS = "app_prefs"
         private const val KEY_PENDING_ACCESSIBILITY_ENABLE_TIME = "pending_accessibility_enable_time"
         private const val KEY_ACCESSIBILITY_ENABLE_GRACE_UNTIL = "accessibility_enable_grace_until"
+        private const val KEY_BROWSER_REENTRY_PACKAGE = "browser_reentry_package"
+        private const val KEY_BROWSER_REENTRY_UNTIL = "browser_reentry_until"
     }
 }

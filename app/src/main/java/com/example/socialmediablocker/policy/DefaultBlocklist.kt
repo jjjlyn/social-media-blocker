@@ -99,7 +99,25 @@ object DefaultBlocklist {
         "tiktok.com",
         "www.tiktok.com",
         "m.tiktok.com",
-        "*.tiktok.com"
+        "*.tiktok.com",
+
+        // 인벤
+        "inven.co.kr",
+        "www.inven.co.kr",
+        "*.inven.co.kr",
+
+        // 82쿡
+        "82cook.com",
+        "www.82cook.com",
+        "*.82cook.com",
+
+        // 웃긴대학
+        "humoruniv.com",
+        "www.humoruniv.com",
+        "*.humoruniv.com",
+        "huv.kr",
+        "www.huv.kr",
+        "*.huv.kr"
     )
     
     /**
@@ -113,7 +131,22 @@ object DefaultBlocklist {
         "gstatic.com",
         "*.gstatic.com",
         "googleapis.com",
-        "*.googleapis.com"
+        "*.googleapis.com",
+        "naver.com",
+        "*.naver.com",
+        "coupang.com",
+        "*.coupang.com",
+        "11st.co.kr",
+        "*.11st.co.kr",
+        "gmarket.co.kr",
+        "*.gmarket.co.kr",
+        "auction.co.kr",
+        "*.auction.co.kr",
+        "wemakeprice.com",
+        "*.wemakeprice.com",
+        "tmon.co.kr",
+        "*.tmon.co.kr",
+        "sitemanager.co.kr"
     )
     
     /**
