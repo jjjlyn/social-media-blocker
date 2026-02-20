@@ -117,7 +117,17 @@ object DefaultBlocklist {
         "*.humoruniv.com",
         "huv.kr",
         "www.huv.kr",
-        "*.huv.kr"
+        "*.huv.kr",
+
+        // 오늘의유머
+        "todayhumor.co.kr",
+        "www.todayhumor.co.kr",
+        "*.todayhumor.co.kr",
+
+        // 보배드림
+        "bobaedream.co.kr",
+        "www.bobaedream.co.kr",
+        "*.bobaedream.co.kr"
     )
     
     /**

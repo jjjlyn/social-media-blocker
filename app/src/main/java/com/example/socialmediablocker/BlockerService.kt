@@ -26,7 +26,13 @@ class BlockerService : AccessibilityService() {
         "com.tiktok.android", // TikTok
         "com.tiktok.android.lite",
         "com.instagram.android", // Instagram
-        "com.facebook.katana" // Facebook
+        "com.facebook.katana", // Facebook
+
+        // Community (Korean)
+        "com.dcinside.app", // DCInside
+        "net.instiz.www.instiz", // 인스티즈
+        "com.mobile.app.today.humor", // 오늘의 유머(오유)
+        "co.kr.bobaedream" // 보배드림
     )
 
     private lateinit var domainRepository: DomainRepository
@@ -45,7 +51,9 @@ class BlockerService : AccessibilityService() {
         "youtube.com", "youtu.be", "m.youtube.com",
         "teamblind.com", "blind.com",
         "inven.co.kr", "www.inven.co.kr", "82cook.com", "www.82cook.com",
-        "humoruniv.com", "huv.kr", "웃긴대학"
+        "humoruniv.com", "huv.kr", "웃긴대학",
+        "todayhumor.co.kr", "www.todayhumor.co.kr",
+        "bobaedream.co.kr", "www.bobaedream.co.kr"
     )
     private val kakaoTalkPackageName = "com.kakao.talk"
     private val browserPackageIdentifiers = listOf(
