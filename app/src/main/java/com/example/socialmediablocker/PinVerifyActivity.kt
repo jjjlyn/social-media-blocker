@@ -59,8 +59,9 @@ class PinVerifyActivity : AppCompatActivity() {
     private fun verifyPin() {
         val inputPin = etPin.text.toString()
 
-        if (inputPin.isEmpty()) {
-            Toast.makeText(this, getString(R.string.toast_pin_required), Toast.LENGTH_SHORT).show()
+        if (!pinManager.isValidPin(inputPin)) {
+            Toast.makeText(this, getString(R.string.toast_pin_invalid_format), Toast.LENGTH_SHORT).show()
+            etPin.text.clear()
             return
         }
 

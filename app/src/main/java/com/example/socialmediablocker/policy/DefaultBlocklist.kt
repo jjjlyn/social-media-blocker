@@ -30,6 +30,7 @@ object DefaultBlocklist {
         // Blind
         "blind.com",
         "www.blind.com",
+        "*.blind.com",
         "teamblind.com",
         "*.teamblind.com",
         

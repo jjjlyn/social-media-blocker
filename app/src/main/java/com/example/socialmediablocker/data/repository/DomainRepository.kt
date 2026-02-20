@@ -25,22 +25,51 @@ class DomainRepository(context: Context) {
     suspend fun initialize() {
         if (isInitialized) return
         
-        val count = domainDao.getCount()
-        
-        if (count == 0) {
+        val existingDomains = domainDao.getAllDomains().first()
+        if (existingDomains.isEmpty()) {
             // 처음 실행 - 기본 도메인 리스트 삽입
             Log.i(TAG, "First run - loading default blocklist")
             loadDefaultDomains()
         } else {
-            // 기존 데이터 로드
-            Log.i(TAG, "Loading $count domains from database")
-            val domains = domainDao.getAllDomains().first()
-            matcher.clear()
-            domains.forEach { matcher.addDomain(it.domain) }
+            // 기존 데이터 보강: 앱 업데이트로 추가된 기본 도메인 반영
+            Log.i(TAG, "Loading ${existingDomains.size} domains from database")
+            syncDefaultDomains(existingDomains)
         }
         
+        val domains = domainDao.getAllDomains().first()
+        matcher.clear()
+        domains.forEach { matcher.addDomain(it.domain.lowercase().trim()) }
         isInitialized = true
         Log.i(TAG, "DomainRepository initialized with ${matcher.getCount()} domains")
+    }
+
+    private suspend fun syncDefaultDomains(existingDomains: List<BlockedDomain>) {
+        val existingDomainSet = existingDomains.map { it.domain.lowercase().trim() }.toMutableSet()
+        val missingDefaultDomains = DefaultBlocklist.getAllBlockedDomains()
+            .map { it.lowercase().trim() }
+            .filter { it.isNotBlank() }
+            .filter { it !in existingDomainSet }
+            .map { domain ->
+                val category = if (domain in DefaultBlocklist.YOUTUBE_DOMAINS) {
+                    "youtube"
+                } else if (domain in DefaultBlocklist.KOREAN_COMMUNITIES) {
+                    "community"
+                } else {
+                    "custom"
+                }
+
+                BlockedDomain(
+                    domain = domain,
+                    category = category,
+                    isWildcard = domain.startsWith("*."),
+                    addedAt = System.currentTimeMillis()
+                )
+            }
+
+        if (missingDefaultDomains.isNotEmpty()) {
+            domainDao.insertDomains(missingDefaultDomains)
+            Log.i(TAG, "Synced ${missingDefaultDomains.size} missing default domains")
+        }
     }
     
     /**

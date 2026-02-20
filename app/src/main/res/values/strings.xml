@@ -43,6 +43,8 @@
     <string name="dialog_cancel">취소</string>
     <string name="toast_verify_fail">인증 실패: 잘못된 PIN입니다.</string>
     <string name="toast_min_digits">설정 실패: 최소 4자리가 필요합니다.</string>
+    <string name="toast_pin_invalid_format">PIN은 4~6자리 숫자만 가능합니다.</string>
+    <string name="toast_pin_set_failed">PIN 설정에 실패했습니다.</string>
     <string name="toast_pin_set">PIN이 성공적으로 설정되었습니다.</string>
     <string name="toast_pin_updated">PIN이 업데이트되었습니다.</string>
     <string name="toast_pin_required">PIN을 입력하세요</string>

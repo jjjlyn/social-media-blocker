@@ -55,6 +55,7 @@
             android:gravity="center"
             android:hint="••••"
             android:inputType="numberPassword"
+            android:digits="0123456789"
             android:letterSpacing="0.4"
             android:maxLength="6"
             android:textColor="@color/text_main"

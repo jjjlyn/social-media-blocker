@@ -130,7 +130,9 @@ class MainActivity : AppCompatActivity() {
             builder.setMessage(getString(R.string.dialog_pin_verify_msg))
             builder.setPositiveButton(getString(R.string.dialog_confirm)) { _, _ ->
                 val oldPin = pinInput.text?.toString().orEmpty()
-                if (pinManager.verifyPin(oldPin)) {
+                if (!pinManager.isValidPin(oldPin)) {
+                    android.widget.Toast.makeText(this, getString(R.string.toast_pin_invalid_format), android.widget.Toast.LENGTH_SHORT).show()
+                } else if (pinManager.verifyPin(oldPin)) {
                     showNewPinDialog()
                 } else {
                     android.widget.Toast.makeText(this, getString(R.string.toast_verify_fail), android.widget.Toast.LENGTH_SHORT).show()
@@ -140,12 +142,15 @@ class MainActivity : AppCompatActivity() {
             builder.setMessage(getString(R.string.dialog_new_pin_msg))
             builder.setPositiveButton(getString(R.string.dialog_establish)) { _, _ ->
                 val newPin = pinInput.text?.toString().orEmpty()
-                if (newPin.length < 4) {
-                    android.widget.Toast.makeText(this, getString(R.string.toast_min_digits), android.widget.Toast.LENGTH_SHORT).show()
+                if (!pinManager.isValidPin(newPin)) {
+                    android.widget.Toast.makeText(this, getString(R.string.toast_pin_invalid_format), android.widget.Toast.LENGTH_SHORT).show()
                 } else {
-                    pinManager.setPin(newPin)
-                    android.widget.Toast.makeText(this, getString(R.string.toast_pin_set), android.widget.Toast.LENGTH_LONG).show()
-                    updateStatus()
+                    if (pinManager.setPin(newPin)) {
+                        android.widget.Toast.makeText(this, getString(R.string.toast_pin_set), android.widget.Toast.LENGTH_LONG).show()
+                        updateStatus()
+                    } else {
+                        android.widget.Toast.makeText(this, getString(R.string.toast_pin_set_failed), android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -170,12 +175,15 @@ class MainActivity : AppCompatActivity() {
         
         builder.setPositiveButton(getString(R.string.dialog_establish)) { _, _ ->
             val newPin = newPinInput.text?.toString().orEmpty()
-            if (newPin.length < 4) {
-                android.widget.Toast.makeText(this, getString(R.string.toast_min_digits), android.widget.Toast.LENGTH_SHORT).show()
+            if (!pinManager.isValidPin(newPin)) {
+                android.widget.Toast.makeText(this, getString(R.string.toast_pin_invalid_format), android.widget.Toast.LENGTH_SHORT).show()
             } else {
-                pinManager.setPin(newPin)
-                android.widget.Toast.makeText(this, getString(R.string.toast_pin_updated), android.widget.Toast.LENGTH_SHORT).show()
-                updateStatus()
+                if (pinManager.setPin(newPin)) {
+                    android.widget.Toast.makeText(this, getString(R.string.toast_pin_updated), android.widget.Toast.LENGTH_SHORT).show()
+                    updateStatus()
+                } else {
+                    android.widget.Toast.makeText(this, getString(R.string.toast_pin_set_failed), android.widget.Toast.LENGTH_SHORT).show()
+                }
             }
         }
         

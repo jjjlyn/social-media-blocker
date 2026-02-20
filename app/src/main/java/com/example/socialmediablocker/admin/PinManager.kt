@@ -24,8 +24,8 @@ class PinManager(context: Context) {
      * PIN 설정
      */
     fun setPin(pin: String): Boolean {
-        if (pin.length < MIN_PIN_LENGTH) {
-            Log.w(TAG, "PIN too short. Minimum length: $MIN_PIN_LENGTH")
+        if (!isValidPin(pin)) {
+            Log.w(TAG, "Invalid PIN format. Must be numeric with ${MIN_PIN_LENGTH}-${MAX_PIN_LENGTH} digits.")
             return false
         }
         
@@ -48,6 +48,11 @@ class PinManager(context: Context) {
      * PIN 검증
      */
     fun verifyPin(pin: String): Boolean {
+        if (!isValidPin(pin)) {
+            Log.w(TAG, "Invalid PIN format.")
+            return false
+        }
+
         val hash = prefs.getString(KEY_PIN_HASH, null)
         
         if (hash.isNullOrEmpty()) {
@@ -94,5 +99,10 @@ class PinManager(context: Context) {
         private const val KEY_PIN_HASH = "pin_hash"
         private const val KEY_PIN_SET_TIME = "pin_set_time"
         private const val MIN_PIN_LENGTH = 4
+        private const val MAX_PIN_LENGTH = 6
+    }
+
+    fun isValidPin(pin: String): Boolean {
+        return pin.length in MIN_PIN_LENGTH..MAX_PIN_LENGTH && pin.all { it in '0'..'9' }
     }
 }
